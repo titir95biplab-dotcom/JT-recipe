@@ -490,7 +490,7 @@ html, body {
 .item-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--purple-light); }
 .item-card:active { transform: translateY(0); }
 .item-card .item-thumb {
-  width: 100%; aspect-ratio: 1;
+  width: 100%; aspect-ratio: 4/5; /* UPDATED: Portrait compatible */
   background: linear-gradient(135deg, var(--purple-bg), #eed5ff);
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
@@ -629,7 +629,9 @@ html, body {
   background: linear-gradient(135deg, var(--purple-dark), var(--purple));
   padding: 16px 18px;
   display: flex; align-items: center; gap: 12px;
+  justify-content: space-between; /* UPDATED to allow edit button */
 }
+.detail-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
 .detail-header .btn-back {
   background: rgba(255,255,255,0.15); border: none;
   color: #fff; width: 36px; height: 36px; border-radius: 10px;
@@ -639,9 +641,18 @@ html, body {
 .detail-header .btn-back:hover { background: rgba(255,255,255,0.25); }
 .detail-header .detail-title { color: #fff; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Edit button in detail header */
+.btn-edit-item-nav {
+  background: var(--yellow); border: none;
+  color: var(--purple-dark); width: 36px; height: 36px; border-radius: 10px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform var(--transition); flex-shrink: 0;
+}
+.btn-edit-item-nav:hover { transform: scale(1.05); }
+
 .detail-body { padding: 0; }
 .detail-image {
-  width: 100%; aspect-ratio: 16/9;
+  width: 100%; aspect-ratio: 4/5; /* UPDATED: Portrait compatible */
   background: linear-gradient(135deg, var(--purple-bg), #eed5ff);
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
@@ -935,10 +946,16 @@ html, body {
 <!-- ===================== PAGE 6: DETAIL ===================== -->
 <div class="page" id="detail-page">
   <div class="detail-header">
-    <button class="btn-back" onclick="goBack()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    <div class="detail-header-left">
+      <button class="btn-back" onclick="goBack()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="detail-title" id="detail-title"></div>
+    </div>
+    <!-- UPDATED: Added Edit Button to Detail Page -->
+    <button class="btn-edit-item-nav" id="btn-edit-current-item" onclick="handleEditFromDetail()" title="Edit Item">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     </button>
-    <div class="detail-title" id="detail-title"></div>
   </div>
   <div class="detail-body">
     <div class="detail-image" id="detail-image"></div>
@@ -1058,20 +1075,17 @@ html, body {
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-app.js";
 import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/12.8.0/firebase-firestore.js";
-// Storage import removed — images stored as Base64 inside Firestore
 
 // ===== FIREBASE CONFIG =====
 const firebaseConfig = {
   apiKey: "AIzaSyA2znS7rEm0HiGwbzp4uq4W71DmGCj_QmM",
   authDomain: "jt-s-recipe.firebaseapp.com",
   projectId: "jt-s-recipe",
-  // storageBucket removed — not used
   messagingSenderId: "841062603880",
   appId: "1:841062603880:web:02f8f66770503e5e366fdd"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-// No Storage instance needed
 
 // ===== CREDS =====
 const STAFF_ID = "JTbirati";
@@ -1082,14 +1096,49 @@ const ADMIN_PASS = "JTbirati@51";
 let currentStaffName = "";
 let currentCategoryId = "";
 let currentCategoryName = "";
-let categoriesData = {};    // { id: { name, icon, createdBy } }
-let itemsData = {};         // { id: { name, categoryId, imageURL, steps, videoLink, addedBy, createdAt } }
-let searchPreviousPage = ""; // track where user was before searching
-let detailPreviousPage = ""; // 'category' or 'search'
-let pendingAdminAction = null; // fn to call after admin verify
-let pendingImageDataURL = null; // for image upload before save
+let currentItemId = ""; // track current item globally
+let categoriesData = {};    
+let itemsData = {};         
+let searchPreviousPage = ""; 
+let detailPreviousPage = ""; 
+let pendingAdminAction = null; 
+let pendingImageDataURL = null; 
 
-// Images are now stored as Base64 strings directly in Firestore — no upload function needed
+// ===== PERSISTENCE LOGIC (UPDATED) =====
+function saveSession() {
+  const session = {
+    staffName: currentStaffName,
+    page: document.querySelector('.page.active')?.id || 'login-page',
+    catId: currentCategoryId,
+    itemId: currentItemId
+  };
+  localStorage.setItem('jt_recipe_session', JSON.stringify(session));
+}
+
+function restoreSession() {
+  const saved = localStorage.getItem('jt_recipe_session');
+  if (!saved) return;
+  const session = JSON.parse(saved);
+  if (!session.staffName) return;
+
+  currentStaffName = session.staffName;
+  document.getElementById('home-staff-display').textContent = 'Staff: ' + currentStaffName;
+  
+  // Wait for data to load before restoring specific sub-pages
+  const checkData = setInterval(() => {
+    if (Object.keys(categoriesData).length > 0) {
+      clearInterval(checkData);
+      if (session.page === 'category-page' && session.catId) {
+        openCategory(session.catId);
+      } else if (session.page === 'detail-page' && session.itemId) {
+        // We need to know where we came from for detail
+        openDetail(session.itemId, 'category'); 
+      } else if (session.page === 'home-page') {
+        showPage('home-page');
+      }
+    }
+  }, 500);
+}
 
 // ===== TOAST =====
 function showToast(msg, type = '') {
@@ -1104,7 +1153,7 @@ function showToast(msg, type = '') {
 // ===== SPINNER =====
 function showSpinner(v) { document.getElementById('spinner').classList.toggle('active', v); }
 
-// ===== IMAGE COMPRESSION (Canvas-based, keeps Base64 under Firestore 1MB doc limit) =====
+// ===== IMAGE COMPRESSION =====
 function compressImage(dataURL, maxWidth = 600, quality = 0.80) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -1126,6 +1175,7 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
+  saveSession(); // Save whenever page changes
 }
 
 // ===== MODALS =====
@@ -1144,7 +1194,6 @@ function handleLogin() {
 }
 window.handleLogin = handleLogin;
 
-// Enter key on login
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     const active = document.querySelector('.page.active');
@@ -1159,7 +1208,6 @@ async function handleStaffStart() {
   if (!name) { showToast('নাম লিখুন প্রথমে', 'error'); return; }
   currentStaffName = name;
   document.getElementById('home-staff-display').textContent = 'Staff: ' + name;
-  // Log session to firebase
   try {
     await addDoc(collection(db, 'user_sessions'), {
       staffName: name,
@@ -1171,29 +1219,33 @@ async function handleStaffStart() {
 }
 window.handleStaffStart = handleStaffStart;
 
-// ===== LOAD DATA (realtime listeners) =====
+// ===== LOAD DATA =====
 function loadData() {
-  // Categories
   onSnapshot(collection(db, 'categories'), (snap) => {
     categoriesData = {};
     snap.docs.forEach(d => { categoriesData[d.id] = d.data(); });
     renderCategories();
   });
-  // Items
   onSnapshot(collection(db, 'items'), (snap) => {
     itemsData = {};
     snap.docs.forEach(d => { itemsData[d.id] = d.data(); });
-    renderCategories(); // update counts
-    // If on category page, refresh items
+    renderCategories();
     if (document.getElementById('category-page').classList.contains('active')) {
       renderItems(currentCategoryId);
     }
   });
 }
 
+// Initialize on load
+window.onload = () => {
+  loadData();
+  restoreSession();
+};
+
 // ===== RENDER CATEGORIES =====
 function renderCategories() {
   const grid = document.getElementById('category-grid');
+  if(!grid) return;
   grid.innerHTML = '';
   Object.keys(categoriesData).forEach(id => {
     const cat = categoriesData[id];
@@ -1223,6 +1275,7 @@ function openCategory(catId) {
   renderItems(catId);
   showPage('category-page');
 }
+window.openCategory = openCategory;
 
 // ===== RENDER ITEMS =====
 function renderItems(catId) {
@@ -1289,6 +1342,30 @@ function openAddItem() {
 }
 window.openAddItem = openAddItem;
 
+// UPDATED: Logic to edit existing item
+function handleEditFromDetail() {
+  const item = itemsData[currentItemId];
+  if(!item) return;
+  
+  document.getElementById('item-modal-title').textContent = 'আইটেম আপডেট করুন';
+  document.getElementById('item-name').value = item.name;
+  document.getElementById('item-steps').value = item.steps || '';
+  document.getElementById('item-youtube').value = item.videoLink || '';
+  document.getElementById('item-edit-id').value = currentItemId;
+  document.getElementById('item-edit-category').value = item.categoryId;
+  
+  if (item.imageURL) {
+    pendingImageDataURL = null; // Don't overwrite unless user picks new file
+    document.getElementById('item-image-preview').src = item.imageURL;
+    document.getElementById('img-preview-wrap').classList.add('visible');
+  } else {
+    removeImagePreview();
+  }
+  
+  openModal('add-item-modal');
+}
+window.handleEditFromDetail = handleEditFromDetail;
+
 function previewImage(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1320,9 +1397,7 @@ async function saveItem() {
   showSpinner(true);
   try {
     let imageURL = '';
-    // If editing, keep old image unless changed
     if (editId && itemsData[editId]) imageURL = itemsData[editId].imageURL || '';
-    // Compress & store new image as Base64 directly in Firestore
     if (pendingImageDataURL) {
       imageURL = await compressImage(pendingImageDataURL, 600, 0.80);
     }
@@ -1334,6 +1409,8 @@ async function saveItem() {
     if (editId) {
       await setDoc(doc(db, 'items', editId), payload);
       showToast('Item updated!', 'success');
+      // Update detail page if user is looking at it
+      if(currentItemId === editId) openDetail(editId, detailPreviousPage);
     } else {
       await addDoc(collection(db, 'items'), payload);
       showToast('Item added!', 'success');
@@ -1349,7 +1426,6 @@ function handleSearch() {
   const q = document.getElementById('search-input').value.trim();
   document.getElementById('search-clear-btn').classList.toggle('visible', q.length > 0);
   if (q.length === 0) { closeSearchOverlay(); return; }
-  // Filter items
   const results = [];
   Object.keys(itemsData).forEach(id => {
     const item = itemsData[id];
@@ -1357,7 +1433,6 @@ function handleSearch() {
       results.push({ id, ...item });
     }
   });
-  // Show overlay
   document.getElementById('search-overlay').classList.add('active');
   document.getElementById('search-overlay-title').textContent = `"${q}" - ${results.length} result${results.length !== 1 ? 's' : ''}`;
   const list = document.getElementById('search-results-list');
@@ -1402,25 +1477,22 @@ window.closeSearchOverlay = closeSearchOverlay;
 // ===== DETAIL PAGE =====
 function openDetail(itemId, fromPage) {
   detailPreviousPage = fromPage;
+  currentItemId = itemId;
   const item = itemsData[itemId];
   if (!item) return;
   document.getElementById('detail-title').textContent = item.name;
   document.getElementById('detail-name').textContent = item.name;
-  // Image
   const imgEl = document.getElementById('detail-image');
   imgEl.innerHTML = item.imageURL
     ? `<img src="${item.imageURL}" alt="${item.name}">`
     : `<span class="detail-placeholder">🧃</span>`;
-  // Meta
   const catName = categoriesData[item.categoryId]?.name || '';
   document.getElementById('detail-meta').innerHTML = `
     <span>👨‍🍳 ${item.addedBy || 'Unknown'}</span>
     <span>📂 ${catName}</span>
     <span>📅 ${item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN') : ''}</span>
   `;
-  // Steps
   document.getElementById('detail-steps').textContent = item.steps || 'No preparation steps added.';
-  // Video
   const videoWrap = document.getElementById('detail-video');
   if (item.videoLink) {
     const ytId = extractYoutubeId(item.videoLink);
@@ -1432,14 +1504,12 @@ function openDetail(itemId, fromPage) {
   } else {
     videoWrap.innerHTML = `<div class="no-video"><span class="nv-icon">📹</span>কোনো ভিডিও যোগ করা হয়নি</div>`;
   }
-  // Store current item id for edit
-  document.getElementById('detail-image').setAttribute('data-item-id', itemId);
   showPage('detail-page');
 }
+window.openDetail = openDetail;
 
 function extractYoutubeId(url) {
   try {
-    // Handle youtu.be short links
     if (url.includes('youtu.be')) {
       const parts = url.split('youtu.be/');
       return parts[1]?.split('?')[0]?.split('&')[0] || null;
@@ -1452,7 +1522,6 @@ function extractYoutubeId(url) {
 function goBack() {
   if (detailPreviousPage === 'search') {
     showPage('home-page');
-    // Re-trigger search overlay
     setTimeout(() => {
       const q = document.getElementById('search-input').value.trim();
       if (q) handleSearch();
@@ -1466,13 +1535,12 @@ window.goBack = goBack;
 function goHome() { showPage('home-page'); }
 window.goHome = goHome;
 
-// ===== ADMIN ACTIONS (Delete Category / Item) =====
+// ===== ADMIN ACTIONS =====
 function askDeleteCategory(catId) {
   pendingAdminAction = () => {
     showConfirm('Delete Category?', `"${categoriesData[catId]?.name}" এবং এর সব item permanently delete হবে।`, async () => {
       showSpinner(true);
       try {
-        // Delete all items in this category
         const itemIds = Object.keys(itemsData).filter(id => itemsData[id].categoryId === catId);
         for (const iid of itemIds) { await deleteDoc(doc(db, 'items', iid)); }
         await deleteDoc(doc(db, 'categories', catId));
@@ -1504,7 +1572,6 @@ function askDeleteItem(itemId) {
 }
 window.askDeleteItem = askDeleteItem;
 
-// Admin modal
 function submitAdmin() {
   const pass = document.getElementById('admin-pass-input').value;
   if (pass === ADMIN_PASS) {
@@ -1519,7 +1586,6 @@ window.submitAdmin = submitAdmin;
 function closeAdminModal() { closeModal('admin-modal'); pendingAdminAction = null; }
 window.closeAdminModal = closeAdminModal;
 
-// Confirm modal
 let confirmCallback = null;
 function showConfirm(title, msg, onConfirm) {
   document.getElementById('confirm-title').textContent = title;
@@ -1532,6 +1598,7 @@ function showConfirm(title, msg, onConfirm) {
 // ===== LOGOUT =====
 function handleLogout() {
   currentStaffName = '';
+  localStorage.removeItem('jt_recipe_session'); // Clear session
   document.getElementById('login-id').value = '';
   document.getElementById('login-pass').value = '';
   document.getElementById('staff-name-input').value = '';
@@ -1541,14 +1608,12 @@ function handleLogout() {
 }
 window.handleLogout = handleLogout;
 
-// ===== CLOSE MODALS ON OVERLAY CLICK =====
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) closeModal(overlay.id);
   });
 });
 
-// ===== ADMIN PASS ENTER KEY =====
 document.getElementById('admin-pass-input').addEventListener('keydown', (e) => { if(e.key==='Enter') submitAdmin(); });
 </script>
 </body>
