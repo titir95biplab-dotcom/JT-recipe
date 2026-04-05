@@ -1182,7 +1182,11 @@ function restoreSession() {
     if (btn) selectOutlet(session.outlet, btn);
   }
   document.getElementById('home-staff-display').textContent = 'Staff: ' + currentStaffName;
-  
+  document.getElementById('home-outlet-title').textContent = OUTLETS[currentOutlet].name;
+
+  // Start listeners for the correct outlet, then restore page
+  loadData();
+
   // Wait for data to load before restoring specific sub-pages
   const checkData = setInterval(() => {
     if (Object.keys(categoriesData).length > 0) {
@@ -1289,13 +1293,25 @@ async function handleStaffStart() {
 window.handleStaffStart = handleStaffStart;
 
 // ===== LOAD DATA =====
+let _unsubCats = null;
+let _unsubItems = null;
+
 function loadData() {
-  onSnapshot(collection(db, col('categories')), (snap) => {
+  // Tear down any existing listeners first
+  if (_unsubCats) { _unsubCats(); _unsubCats = null; }
+  if (_unsubItems) { _unsubItems(); _unsubItems = null; }
+
+  // Clear stale data
+  categoriesData = {};
+  itemsData = {};
+  renderCategories();
+
+  _unsubCats = onSnapshot(collection(db, col('categories')), (snap) => {
     categoriesData = {};
     snap.docs.forEach(d => { categoriesData[d.id] = d.data(); });
     renderCategories();
   });
-  onSnapshot(collection(db, col('items')), (snap) => {
+  _unsubItems = onSnapshot(collection(db, col('items')), (snap) => {
     itemsData = {};
     snap.docs.forEach(d => { itemsData[d.id] = d.data(); });
     renderCategories();
@@ -1305,9 +1321,8 @@ function loadData() {
   });
 }
 
-// Initialize on load
+// Initialize on load — do NOT call loadData() here; call it only after login
 window.onload = () => {
-  loadData();
   restoreSession();
 };
 
