@@ -1140,7 +1140,10 @@ const OUTLETS = {
 let currentOutlet = "birati";   // which outlet is selected
 
 // Helper: get Firestore collection name scoped by outlet
-function col(name) { return currentOutlet + '_' + name; }
+function col(name) {
+  if (currentOutlet === 'birati') return name;  // birati uses original collection names
+  return currentOutlet + '_' + name;            // nimta uses nimta_categories, nimta_items etc
+}
 
 // ===== STATE =====
 let currentStaffName = "";
