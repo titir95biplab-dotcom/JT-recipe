@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>JT Birati - Recipe Book</title>
+<title>JT Recipe Book</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -46,6 +46,30 @@
   --shadow-md: 0 6px 20px rgba(106,13,173,0.12);
   --shadow-lg: 0 12px 36px rgba(106,13,173,0.18);
   --transition: 0.28s cubic-bezier(.4,0,.2,1);
+}
+
+
+/* ===== OUTLET SELECTOR ===== */
+.outlet-selector {
+  display: flex; gap: 10px;
+}
+.outlet-btn {
+  flex: 1; padding: 11px 8px;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  background: var(--gray-50);
+  color: var(--gray-500);
+  font-size: 13px; font-weight: 600;
+  font-family: var(--font-bengali);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.outlet-btn:hover { border-color: var(--purple-light); color: var(--purple); }
+.outlet-btn.active {
+  border-color: var(--purple);
+  background: var(--purple-bg);
+  color: var(--purple-dark);
+  box-shadow: 0 0 0 3px rgba(106,13,173,0.1);
 }
 
 html, body {
@@ -846,8 +870,16 @@ html, body {
       <div class="logo-icon">
         <svg viewBox="0 0 36 36" fill="none"><circle cx="18" cy="18" r="16" fill="none" stroke="#FFD700" stroke-width="2.5"/><path d="M18 6 C10 6, 6 12, 6 18 C6 24, 10 28, 18 30 C26 28, 30 24, 30 18 C30 12, 26 6, 18 6Z" fill="#FFD700" opacity="0.25"/><path d="M18 10 C12 10, 9 14, 9 18 C9 22, 12 26, 18 27 C24 26, 27 22, 27 18 C27 14, 24 10, 18 10Z" fill="#FFD700" opacity="0.5"/><circle cx="18" cy="18" r="4" fill="#FFD700"/></svg>
       </div>
-      <h1>JT Birati</h1>
+      <h1 id="login-outlet-title">JT Birati</h1>
       <p>Juice Therapy Recipe Book</p>
+    </div>
+    <!-- Outlet Selector -->
+    <div class="login-field">
+      <label>Select Outlet</label>
+      <div class="outlet-selector" id="outlet-selector">
+        <button class="outlet-btn active" data-outlet="birati" onclick="selectOutlet('birati', this)">🏪 JT Birati</button>
+        <button class="outlet-btn" data-outlet="nimta" onclick="selectOutlet('nimta', this)">🏪 JT Nimta</button>
+      </div>
     </div>
     <div class="login-field">
       <label>Staff ID</label>
@@ -882,7 +914,7 @@ html, body {
         <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" fill="#6A0DAD"/><circle cx="10" cy="10" r="4" fill="#FFD700"/></svg>
       </div>
       <div>
-        <div class="top-title">JT Birati</div>
+        <div class="top-title" id="home-outlet-title">JT Birati</div>
         <div class="top-staff" id="home-staff-display"></div>
       </div>
     </div>
@@ -1087,10 +1119,28 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ===== CREDS =====
-const STAFF_ID = "JTbirati";
-const STAFF_PASS = "0051";
-const ADMIN_PASS = "JTbirati@51";
+// ===== OUTLET CONFIG =====
+const OUTLETS = {
+  birati: {
+    name: "JT Birati",
+    staffId: "JTbirati",
+    staffPass: "0051",
+    adminPass: "JTbirati@51",
+    prefix: "birati"   // Firestore collection prefix
+  },
+  nimta: {
+    name: "JT Nimta",
+    staffId: "JTNimta",
+    staffPass: "700049",
+    adminPass: "JTNimta@700049",
+    prefix: "nimta"
+  }
+};
+
+let currentOutlet = "birati";   // which outlet is selected
+
+// Helper: get Firestore collection name scoped by outlet
+function col(name) { return currentOutlet + '_' + name; }
 
 // ===== STATE =====
 let currentStaffName = "";
@@ -1108,6 +1158,7 @@ let pendingImageDataURL = null;
 function saveSession() {
   const session = {
     staffName: currentStaffName,
+    outlet: currentOutlet,
     page: document.querySelector('.page.active')?.id || 'login-page',
     catId: currentCategoryId,
     itemId: currentItemId
@@ -1122,6 +1173,11 @@ function restoreSession() {
   if (!session.staffName) return;
 
   currentStaffName = session.staffName;
+  if (session.outlet) {
+    currentOutlet = session.outlet;
+    const btn = document.querySelector(`.outlet-btn[data-outlet="${session.outlet}"]`);
+    if (btn) selectOutlet(session.outlet, btn);
+  }
   document.getElementById('home-staff-display').textContent = 'Staff: ' + currentStaffName;
   
   // Wait for data to load before restoring specific sub-pages
@@ -1183,10 +1239,20 @@ function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
 // ===== LOGIN =====
+function selectOutlet(outlet, btn) {
+  currentOutlet = outlet;
+  document.querySelectorAll('.outlet-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('login-outlet-title').textContent = OUTLETS[outlet].name;
+}
+window.selectOutlet = selectOutlet;
+
 function handleLogin() {
   const id = document.getElementById('login-id').value.trim();
   const pass = document.getElementById('login-pass').value.trim();
-  if (id === STAFF_ID && pass === STAFF_PASS) {
+  const cfg = OUTLETS[currentOutlet];
+  if (id === cfg.staffId && pass === cfg.staffPass) {
+    document.getElementById('home-outlet-title').textContent = cfg.name;
     showPage('staff-page');
   } else {
     showToast('Invalid ID or Password', 'error');
@@ -1209,7 +1275,7 @@ async function handleStaffStart() {
   currentStaffName = name;
   document.getElementById('home-staff-display').textContent = 'Staff: ' + name;
   try {
-    await addDoc(collection(db, 'user_sessions'), {
+    await addDoc(collection(db, col('user_sessions')), {
       staffName: name,
       loginTime: new Date().toISOString()
     });
@@ -1221,12 +1287,12 @@ window.handleStaffStart = handleStaffStart;
 
 // ===== LOAD DATA =====
 function loadData() {
-  onSnapshot(collection(db, 'categories'), (snap) => {
+  onSnapshot(collection(db, col('categories')), (snap) => {
     categoriesData = {};
     snap.docs.forEach(d => { categoriesData[d.id] = d.data(); });
     renderCategories();
   });
-  onSnapshot(collection(db, 'items'), (snap) => {
+  onSnapshot(collection(db, col('items')), (snap) => {
     itemsData = {};
     snap.docs.forEach(d => { itemsData[d.id] = d.data(); });
     renderCategories();
@@ -1314,7 +1380,7 @@ async function saveCategory() {
   if (!name) { showToast('Category নাম লিখুন', 'error'); return; }
   showSpinner(true);
   try {
-    await addDoc(collection(db, 'categories'), {
+    await addDoc(collection(db, col('categories')), {
       name: name,
       icon: icon || '📂',
       createdBy: currentStaffName
@@ -1407,12 +1473,12 @@ async function saveItem() {
       createdAt: editId ? (itemsData[editId]?.createdAt || new Date().toISOString()) : new Date().toISOString()
     };
     if (editId) {
-      await setDoc(doc(db, 'items', editId), payload);
+      await setDoc(doc(db, col('items'), editId), payload);
       showToast('Item updated!', 'success');
       // Update detail page if user is looking at it
       if(currentItemId === editId) openDetail(editId, detailPreviousPage);
     } else {
-      await addDoc(collection(db, 'items'), payload);
+      await addDoc(collection(db, col('items')), payload);
       showToast('Item added!', 'success');
     }
     closeModal('add-item-modal');
@@ -1542,8 +1608,8 @@ function askDeleteCategory(catId) {
       showSpinner(true);
       try {
         const itemIds = Object.keys(itemsData).filter(id => itemsData[id].categoryId === catId);
-        for (const iid of itemIds) { await deleteDoc(doc(db, 'items', iid)); }
-        await deleteDoc(doc(db, 'categories', catId));
+        for (const iid of itemIds) { await deleteDoc(doc(db, col('items'), iid)); }
+        await deleteDoc(doc(db, col('categories'), catId));
         showToast('Category deleted', 'success');
       } catch(e) { showToast('Delete failed', 'error'); }
       showSpinner(false);
@@ -1560,7 +1626,7 @@ function askDeleteItem(itemId) {
     showConfirm('Delete Item?', `"${itemsData[itemId]?.name}" permanently delete হবে।`, async () => {
       showSpinner(true);
       try {
-        await deleteDoc(doc(db, 'items', itemId));
+        await deleteDoc(doc(db, col('items'), itemId));
         showToast('Item deleted', 'success');
       } catch(e) { showToast('Delete failed', 'error'); }
       showSpinner(false);
@@ -1598,6 +1664,12 @@ function showConfirm(title, msg, onConfirm) {
 // ===== LOGOUT =====
 function handleLogout() {
   currentStaffName = '';
+  currentOutlet = 'birati';
+  // Reset outlet selector UI
+  document.querySelectorAll('.outlet-btn').forEach(b => b.classList.remove('active'));
+  const biratibtn = document.querySelector('.outlet-btn[data-outlet="birati"]');
+  if (biratibtn) biratibtn.classList.add('active');
+  document.getElementById('login-outlet-title').textContent = OUTLETS['birati'].name;
   localStorage.removeItem('jt_recipe_session'); // Clear session
   document.getElementById('login-id').value = '';
   document.getElementById('login-pass').value = '';
