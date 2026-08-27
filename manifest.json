@@ -1,0 +1,21 @@
+{
+  "name": "JT Recipe Book",
+  "short_name": "JT Recipe",
+  "description": "Recipe reference for Juice Therapy outlet staff",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#6A0DAD",
+  "theme_color": "#6A0DAD",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "logo-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "logo-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["business", "food"],
+  "prefer_related_applications": false,
+  "related_applications": [
+    { "platform": "webapp", "url": "https://titir95biplab-dotcom.github.io/JT-recipe/manifest.json" }
+  ]
+}
