@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>JT Recipe Book</title>
+<meta name="theme-color" content="#6A0DAD">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo-192.png" type="image/png">
+<link rel="apple-touch-icon" href="logo-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1705,6 +1709,20 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 });
 
 document.getElementById('admin-pass-input').addEventListener('keydown', (e) => { if(e.key==='Enter') submitAdmin(); });
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').then(reg => {
+            reg.addEventListener('updatefound', () => {
+                const w = reg.installing;
+                w && w.addEventListener('statechange', () => {
+                    if (w.state === 'installed' && navigator.serviceWorker.controller) location.reload();
+                });
+            });
+        }).catch(e => console.error('SW registration failed:', e));
+    });
+}
 </script>
 </body>
 </html>
